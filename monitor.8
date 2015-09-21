@@ -1,0 +1,67 @@
+.\"
+.\" Man page for monitor
+.\"
+.\" Copyright (c) 2002, 2004 Crispin Perdue
+.\"
+.\" You may distribute under the terms of the GNU General Public
+.\" License
+.\"
+.\" cris@perdues.com
+.\"
+.TH monitor 8 "September 29, 2004"
+.LO 1
+.SH NAME
+monitor \- Manage a daemon process, restarting if it exits
+.SH SYNOPSIS
+.B monitor
+.RI [ " options " ] " cmd " [ " arg ... " ]
+
+.SH DESCRIPTION
+The
+.B monitor
+utility manages a child process.  The
+.B monitor
+restarts the child if it exits and logs child startups and
+terminations via syslog.  Use of a monitor process gives added
+assurance that a service will be continuously available and that there
+will be notification if it fails.
+.P
+If the monitor receives SIGTERM (or SIGINT), it sends SIGTERM to the
+child and then exits itself.  If it receives another of these after
+commencing a kill of its child process, it sends the child SIGKILL.
+In other words killing the monitor process twice forces a hard kill of
+the child.  In any case the monitor process does not exit until it has
+confirmation that the child has terminated, which helps make service
+stop-then-start sequences more reliable.
+.P
+If the monitor receives SIGHUP it forwards the signal to the child
+process, By convention this requests a reload of its configuration
+files.  If the child is unprepared for SIGHUP, the signal will kill
+it, but the monitor will still restart it.
+.P
+The monitor program writes a file /tmp/<service-name>.<pid>.status,
+currently just a caution message during child startups.  Startstop(8)
+reads this file for service status information.
+.P
+It logs child process startups and terminations to syslog at the
+LOG_NOTICE level, using the LOG_DAEMON facility.  If the child exits
+(except when being killed by its monitor), it logs child termination
+at the LOG_ERR level.  Child restarts include a two-second delay after
+the child has terminated, to limit the rate of process spawning.  If the
+child does not stay up for one minute after its initial startup, or at
+least until the monitor sends it a signal, the monitor treats the
+startup as unsuccessful and does not restart the child.
+
+.SH OPTIONS
+.TP
+-n service_name
+The monitor includes the service name in syslog messages and in the
+filename of its status file.  If no name is given, it uses the base
+name of the command.
+.TP
+-e
+With the -e option, the monitor makes the child's stderr a duplicate
+of its stdout.  Error messages from monitor itself go to the original
+stderr.
+.SH "SEE ALSO"
+startstop(8), setuser(8)

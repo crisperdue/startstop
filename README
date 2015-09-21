@@ -1,0 +1,34 @@
+Startstop -- a Universal Init Script Support Utility
+Author: Cris Perdue <cris@perdues.com>
+
+This "universal" LSB (Linux Standard Base) start/stop package
+streamlines authoring of application init scripts for daemon-style
+servers.  It provides a full set of LSB actions (start/stop/restart/-
+status/etc.), and supports running the server as a non-root user,
+protection against SIGHUP, reliable service restart, service monitoring
+with auto-restart, and logging of significant events to syslog.  It was
+built originally for Java servers, but can be valuable for many other
+servers as well.
+
+The main command-line program, "startstop", is designed to provide most
+of the logic for a standard init script, typically located in
+/etc/init.d/ according to the latest standard file system layouts.  The
+"monitor" command and "setuser" command might find some general utility
+also.
+
+The files "myservice" and "myservice-redhat" in the documentation are
+sample init scripts using startstop.  See also the man page for
+startstop, for monitor, and the documentation file "CHANGES" for the
+package change history.
+
+This software is a variant of software that has been used for three or
+four years, but has experienced some redesign and rewriting to comply
+with the LSB specification and more logical usage, so I consider it to
+be at a beta stage of maturity.  This software has minimal dependencies
+and the startstop shell script attempts to conform to the Single Unix
+Specification; however its portability to non-Linux systems has not been
+tested.  There is no autoconfiguration, just a simple Makefile.
+
+This software is currently released under the Lesser GNU Public License
+version 2.1.
+

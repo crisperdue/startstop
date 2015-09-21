@@ -1,0 +1,205 @@
+.\"
+.\" Man page for startstop
+.\"
+.\" Copyright (c) 2002,2004 Crispin Perdue
+.\"
+.\" You may distribute under the terms of the GNU General Public
+.\" License
+.\"
+.\" cris@perdues.com
+.\"
+.TH startstop 8 "September 22, 2004"
+.LO 1
+.SH NAME
+startstop \- LSB-compliant service start/stop system
+.SH SYNOPSIS
+.B startstop
+.RI [ " options " ] " service-name action command " [ " arg ... " ]
+
+.SH DESCRIPTION
+The universal LSB (Linux Standard Base) start/stop package streamlines
+authoring of application init scripts for daemon-style servers.  It
+provides a full set of LSB actions (start/stop/status/etc.), and
+supports running the server as a non-root user, protection against
+SIGHUP, service monitoring with child auto-restart and reliable
+service restart, logging of server events and server output.  It was
+built originally for Java servers, but can be useful for many other
+servers also.
+.P
+The startstop command is made for use in application init scripts. 
+Follow the convention of supplying the name of the init script as the
+first argument -- you can accomplish this by writing "$(basename $0)".
+The second argument to startstop is the action, which is "$1", the
+first argument to the init script.  The remaining arguments are the
+name of the server program to run and any command line arguments for
+it.  For actions other than "start", startstop ignores the server
+program name and following arguments.
+.P
+In this document we will call any server instance run by an init script
+a service, regardles of the port it may listen on.  For example if
+multiple web servers run from different init scripts, we will call each
+one a service, no matter whether they all run on port 80 (on distinct
+IP addresses) or on various different ports.  So this is a different
+meaning than service names in, for example, /etc/services.
+.P
+By giving each service its own name in the init script, you can run
+multiple instances of the same server program as long as you avoid
+conflicts for system resources such as listener ports.
+.P
+The exit status from startstop complies with the LSB specification.  For
+all rules but status:
+.RS
+.nf
+0 - success
+1 - generic or unspecified error
+2 - invalid or excess argument(s)
+3 - unimplemented feature (e.g. "reload")
+4 - insufficient privilege
+5 - program is not installed
+6 - program is not configured (not used by startstop)
+7 - program is not running
+.fi
+.RE
+.P
+The following somewhat nonstandard situations are considered successful,
+and startstop issues an informative message and reports success:
+.RS
+.nf
+restarting a service (instead of reloading it) with the "force-reload" argument
+running "start" on a service already running
+running "stop" on a service already stopped or not running
+running "restart" on a service already stopped or not running
+running "try-restart" on a service already stopped or not running
+.fi
+.RE
+.SH ACTIONS
+.TP 
+start
+If the service is already running, does nothing.  If the service
+is not already running, attempts to start it, recording its process ID
+in /var/run/<service>.pid.  If the directory /var/lock/subsys exists,
+this will create /var/lock/subsys/<service>, though this
+can be disabled.
+.IP
+The start action always makes the started process the leader of a new
+session. This avoids HANGUP signals that might be sent to it when a
+terminal session ends, for example if the system administrator starts
+the daemon from a command prompt. It also simplifies finding processes
+and threads belonging to this daemon, since they will share its session
+id.  The start action can also set the user ID for the server process,
+redirect its output to a log file and set up a parent process that
+monitors and controls the server.  See the -u, -l, and -m options.
+.TP
+stop
+Checks whether the given service has a recorded process id, and if so,
+whether a process with that id exists.  If so, it stops the service
+with a TERM signal and returns when the process for the id ceases to
+exist.  For most daemons that listen on sockets, restarts are improved
+because the "stop" action is synchronous: it does not return to you
+until the daemon has actually terminated.
+.TP
+restart
+Performs a "stop" followed by a "start".
+.TP
+try-restart
+If the service is currently running, does a restart, otherwise does
+nothing.
+.TP
+reload
+If the -r option is given, this causes the server to reload its
+configuration by sending it a signal, which defaults to SIGHUP.  Exits
+with status 7 if the service is not running.
+.TP
+force-reload
+If the -r option is given, same as reload.  Otherwise if the service is
+running restarts it.  Exits with status 7 if the service is not
+running.
+.TP
+status
+Displays process status for the main daemon process.  The display
+includes all child processes by using ps f.  Exits with 0 status if the
+server is actually running, otherwise issues a message and exits as
+follows:
+.RS
+.nf
+1 - program is dead and /var/run pid file exists
+2 - program is dead and /var/lock lock file exists
+3 - program is not running
+4 - program or service status unknown (not used by startstop)
+.fi
+.RE
+.TP
+signal
+Sends a signal to the main daemon process; SIGHUP is the default,
+overrideable with the -s option.
+.TP
+sig*
+Any action other than "signal" starting with "sig" should be the name of
+a signal, which it will send to the running server.
+
+.SH OPTIONS
+.P
+Most options apply only to a subset of the possible actions, and the
+command and its arguments only apply when an action results in a restart
+of the daemon.  In a script, you aupply all appropriate options and
+arguments.  Startstop applies them as appopriate to the action requested.
+.TP
+-l logfile
+With this option the start action will redirect the server's stdout
+and stderr to the named logfile, otherwise it does no redirection.  It
+arranges to delay stderr redirection until startstop and any
+monitor(8) process has a chance to issue start-time error messages.
+.TP
+-L
+With this option /var/lock/subsys is ignored entirely regardless of
+whether the directory exists.
+.TP
+-m
+With -m, the start action sets up a parent monitoring process that
+tracks and logs the status of the service, automatically restarts it if
+it dies, and can stop or restart the server in response to signals
+received by the monitor.  Monitoring is accomplished by running the
+.B monitor
+utility, which in turn will run the intended server as a child process. 
+See monitor(8).
+.TP
+-r
+Enables the reload action.  With -r, reload sends SIGHUP to the server,
+or with -s, the signal specified by -s.
+.TP
+-s signal
+This sets the signal to use for the "signal" action, and if -r is given,
+the signal to send to the server for the reload action.  The signal can
+be given as a number or a signal name, e.g. SIGALRM or sigalrm.
+.TP
+-u username
+This causes the server to run as the named user.  The server process's
+uid is set to the ID of the given name, its principal group ID is set to
+that user's principal group ID, and its supplementary group IDs are set
+to that user's supplementary group IDs.  The uid and gids are the same
+ones set up for that user's login.
+
+.SH FILES
+.TP
+/var/run/<service-name>.pid
+The standard file containing the server's process ID.
+.TP
+/var/lock/subsys/<service-name>
+An additional file expected by some initscript frameworks.
+
+.SH EXAMPLES
+
+To start a Java server as "nobody", monitoring it and directing its
+stdout and stderr to /var/log/jsplog: 
+
+startstop -u nobody -l /var/log/jsplog -m "$(basename $0)" \\
+  java com.my.MyServer
+
+.SH "SEE ALSO"
+setuser(8), monitor(8)
+
+.SH BUGS
+Please report if found.
+
+.SH AUTHOR
+Crispin Perdue

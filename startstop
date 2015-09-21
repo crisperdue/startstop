@@ -1,0 +1,383 @@
+#!/bin/sh
+#
+# Copyright 2001, 2002, 2004 Crispin Perdue (cris@perdues.com).
+# This script is distributable under the terms of the GNU Public License.
+#
+# Universal LSB-compliant (SytemV-ish) server start/stop script
+#
+# This provides a full LSB-compliant set of operations following
+# the SysV conventions for both service invocation and process management.
+#
+# The pid file and subsys lock file names are both derived from the service
+# name, so it should be unique across all services on a given system.
+# Some runlevel change scripts (RedHat) expect the service name to be the
+# same as the name of the start/stop script, so ideally a start/stop script
+# passes its own basename to this as the service name.
+#
+# The name of the service can be different than the program name, for
+# example to run multiple instances of the same server program e.g. on
+# different ports, or to run different Java VM instances on the same
+# system.
+#
+# The start action runs the service in a new session, which prevents
+# events on its controlling terminal from sending it SIGHUP.
+#
+# The "stop" action does not return until the killed process actually
+# terminates.
+#
+# Restart waits for the killed process to terminate before starting a
+# instance, greatly enhancing its reliability. 
+#
+# The status action displays the service process and all processes in
+# the session it leads.
+#
+# The "signal" action sends SIGHUP to the service process if it is running.
+# If the action matches "sig*" but is not "signal", it sends the signal named.
+#
+# This locks /var/lock/subsys/<name> if the /var/lock/subsys directory
+# exists and the -L option is not given.
+#
+# Informative messages to stderr for actions (except status) that result
+# in nonzero exit status.  Notes other information to stdout.
+#
+# pidfile: /var/run/<name>.pid
+#
+# EXAMPLES:
+#
+# This script provides most of the functionality for a
+# start/stop script.  Usage could be:
+#
+# In /etc/rc.d/init.d/qmail:
+#
+# startstop qmail "$1" /var/qmail/boot/home
+#
+# In /etc/rc.d/init.d/servlets:
+#
+# startstop -u nobody -m servlets "$1" java -Xmx64m -Xms64m com.foo.Main
+#
+# With the -u option, in addition to the eventual server program,
+# any monitor program uses this user id and this opens any log files
+# opened here are opened with that user id.
+#
+##########################################################################
+
+
+##########################################################################
+#
+# LSB-style descriptive information in an init script looks like this:
+# 
+### BEGIN INIT INFO
+# Provides:       xntpd ntpd
+# Required-Start: $remote_fs $syslog $named
+# Required-Stop:  $remote_fs $syslog
+# Default-Start:  2 3 5
+# Default-Stop:   0 1 6
+# Description:    Start network time protocol daemon (NTPD).
+### END INIT INFO
+#
+# Return values acc. to LSB for all commands but status:
+# 0 - success
+# 1 - generic or unspecified error
+# 2 - invalid or excess argument(s)
+# 3 - unimplemented feature (e.g. "reload")
+# 4 - insufficient privilege
+# 5 - program is not installed
+# 6 - program is not configured
+#
+# LSB status command exit codes:
+# 0 - program is running or service is OK
+# 1 - program is dead and /var/run pid file exists
+# 2 - program is dead and /var/lock lock file exists
+# 3 - program is not running
+# 4 - program or service status is unknown
+#
+##########################################################################
+
+####
+#### FUNCTIONS
+####
+
+usage() {
+  echo Usage: $(basename $0) [ -Lmr -l logfile -s signal -u user ] system-name \
+  "start|stop|restart|try-restart|reload|force-reload|status|sig* cmd [ arg ... ]" >&2
+}
+
+# Checks whether the given PID is running.
+# We use /proc now rather than kill -0 because
+# it works for users who may not be allowed to
+# send a signal to the process.
+isrunning() {
+  test -d /proc/$pid
+}
+
+# Path to a command, given by the argument, empty
+# if not found.
+cmdpath() {
+  command -v "$1" | grep "^/"
+}
+
+# Path to a utility with a given name.
+# The name is handled as relative to the path
+# for this script.
+utilpath() {
+  self=$(cmdpath "$0")
+  echo "$(dirname "$self")/$1"
+}
+
+# Echoes its n+1st argument: the first arg is "n"
+nth() {
+  shift "$1"
+  echo "$1"
+}
+
+# Outputs the number of seconds since the given process (pid) started.
+uptime() {
+  # This value comes directly from /proc as 100ths of second since boot
+  starttime=$(nth 22 $(cat /proc/$1/stat))
+  # Boot time in seconds since the epoch.
+  btime=$(nth 2 $(grep btime /proc/stat))
+  # Start time in seconds since the epoch
+  start=$((btime+starttime/100))
+  now=$(date +%s)
+  echo $((now-start))
+}
+
+# Do the work for anything requiring a start.
+# Most callers will want to exit with the status given
+# as this function's return value.
+start() {
+  if test -n "$pid" && isrunning; then
+    echo "$name already running as $pid"
+    return 0
+  fi
+  if [ ! -w /var/run ]; then
+    echo "Can't create file in /var/run" >&2
+    return 4
+  fi
+  if [ -n "$lock" ]; then
+    touch $lockfile || (echo "Cannot create $lockfile" >&2; exit 4)
+  fi
+
+  test -n "$(cmdpath $1)" || (echo "Program $1 not runnable" >&2; exit 5)
+  
+  # Start the service.  Order of operation is:
+  # Set user id; open logfile on stdout; monitor or program.
+  # Setsid could run anywhere in the chain, let's run it late,
+  # we'll add the command here.
+  if [ -n "$monitor_opt" ]; then
+      # Rely on the monitor to redirect its its own and
+      # its child's stderr to its original stdout after
+      # a successful exec.
+      mon_opt=
+      test -n "$logfile" && mon_opt=-e
+      with_logging setsid "$monitor" -n "$name" $mon_opt "$@"
+  else
+      with_logging setsid "$@"
+  fi
+  pid=$!
+
+  # Echo and "touch" will print an error message for us
+  # if there is a problem.
+  echo $pid >$pidfile || \
+    (echo "Failed to create $pidfile" >&2; exit 1)
+  return 0
+}
+
+# Add logging to the FRONT of the command and continue
+with_logging() {
+  if [ -n "$logfile" ]; then
+    log_opt=
+    test -n "$monitor_opt" && log_opt=-e
+    with_setuser "$logto" $log_opt "$logfile" "$@"
+  else
+    with_setuser "$@"
+  fi
+}
+
+# Add "setuser" to the FRONT of the command and execute asynchronously.
+with_setuser() {
+  if [ -n "$user" ]; then
+    "$setuser" "$user" "$@" &
+  else
+    "$@" &
+  fi
+}
+
+
+# Do the work for anything requiring a stop.
+stop() {
+  test -n "$lock" && rm -f $lockfile
+  if [ -z "$pid" ]; then
+    echo "$name is not running"
+    return 0
+  elif isrunning $pid; then
+    kill $pid || (echo "Kill $pid failed" >&2; return 1)
+    # Wait for it to die.
+    while kill -0 $pid >/dev/null 2>&1; do sleep 1; done
+    rm -f $pidfile
+    return 0
+  else
+    echo "$name not running, removing $pidfile"
+    rm -f "$pidfile"
+    return 0
+  fi
+}
+
+
+
+####
+#### MAIN PROGRAM
+####
+
+mypath=$(cmdpath $0)
+
+monitor="$(utilpath monitor)"
+setuser="$(utilpath setuser)"
+logto="$(utilpath logto)"
+
+
+# Name of signal to send on action "signal" or reload
+signal=sighup
+
+lock=
+# Plan to put a lock file in /var/lock/subsys if the
+# directory exists.
+test -d /var/lock/subsys && lock=1
+
+# Option enables the reload action, off by default
+allow_reload=
+
+# Set nonempty to turn on logging
+logfile=
+
+# Option turns on monitoring of the service
+monitor_opt=
+
+# If nonempty, username of user to switch to
+user=
+
+while getopts l:mrs:u: option; do
+  case $option in
+    l) logfile="$OPTARG";;
+    L) lock=;;
+    m) monitor_opt=1;;
+    r) allow_reload=1;;
+    s) signal="$OPTARG";;
+    u) user="$OPTARG";;
+    ?) usage
+       # Invalid or excess arguments
+       exit 2;;
+  esac
+done
+shift $((OPTIND-1))
+
+if [ $# -lt 3 ]; then
+  usage
+  exit 2
+fi
+
+# The subsystem name should be the base name of the calling script.
+name="$1"
+action="$2"
+shift 2
+
+# The positional parameters are now "$@"
+
+pidfile=/var/run/$name.pid
+lockfile=/var/lock/subsys/$name
+
+# Contents of pidfile or empty string
+pid=$(test -r $pidfile && cat $pidfile)
+
+# Do an action!
+#
+case "$action" in
+
+  start)
+        start "$@"
+        exit $?
+	;;
+
+  stop) 
+        stop
+        exit $?
+	;;
+
+  signal)
+        # This command is an extension
+	kill "-$signal" "$pid"
+	;;
+
+  sig*)
+        # This command is an extension
+	kill "-$action" "$pid"
+	;;
+
+  restart)
+	stop
+	start "$@"
+        exit $?
+	;;
+
+  try-restart)
+        if test -n "$pid"; then
+          stop
+          start "$@"
+          exit $?
+        fi
+        ;;
+
+  reload|force-reload)
+        if test -z "$reload"; then
+          if [ "$action" = reload ]; then
+            echo "reload not supported"
+            exit 3
+          else
+            # If no reload, implement force-reload as restart
+            stop
+            start "$@"
+            exit $?
+          fi
+        fi
+        if test -n "$pid" && isrunning; then
+          # If reload is automatic, user can use sigcont as the signal.
+          if kill "-$signal" "$pid"; then
+            exit 0
+          else
+            echo "Could not send $signal to $pid" >&2; exit 1
+          fi
+        else
+          echo "$name is not running" >&2
+          exit 7
+        fi
+        ;;
+
+  status)
+	# The LSB status action has its own set of exit codes
+	if [ -z "$pid" ]; then
+	  echo "$name is not running"
+          exit 3
+	elif isrunning; then
+          if [ -z "$monitor_opt" -a "$(uptime $pid)" -lt 60 ]; then
+            echo "CAUTION: $name uptime < 1 minute."
+          fi
+	  status="/tmp/$name.$pid.status"
+	  test -r "$status" && cat "$status"
+	  ps f --sid $pid -o user,pid,vsize,rss,stat,%cpu,bsdstart,command
+          exit 0
+        else
+          if test -f "$lockfile"; then
+	    echo "$name left behind $lockfile"
+            exit 2
+          else
+	    echo "$name left behind $pidfile"
+            exit 1
+          fi
+	fi
+	;;
+
+  *)
+	usage
+        # Invalid arguments
+	exit 2
+esac

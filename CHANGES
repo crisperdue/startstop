@@ -1,0 +1,22 @@
+CHANGE LOG
+==========
+
+0.74
+
+The startstop script status command now directly knows about time since
+child process startup.  The child process is not restarted now by
+monitor within the first minute after initial start, unless the monitor
+has sent it a signal.
+
+0.73
+
+Changed the formatting of the syslog messages.  Added sample init
+scripts.
+
+0.72
+
+Improved README, small internal documentation changes.
+
+0.71
+
+Initial public release.

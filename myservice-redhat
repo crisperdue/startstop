@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# RedHat-style init script using startstop
+#
+# chkconfig: 345 92 08
+# description: myservice daemon
+#
+
+export PATH=/usr/bin:/bin
+export CLASSPATH=/path/to/classes...
+
+startstop -m -u nobody -l /var/log/$SERVICE.log $SERVICE "$1" \
+  /usr/bin/java -Xms100m -Xmx100m com.mycompany.Server

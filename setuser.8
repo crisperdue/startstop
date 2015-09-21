@@ -1,0 +1,37 @@
+.\"
+.\" Man page for setuser
+.\"
+.\" Copyright (c) 2002, 2004, Crispin Perdue
+.\"
+.\" You may distribute under the terms of the GNU General Public
+.\" License
+.\"
+.\" cris@perdues.com
+.\"
+.TH setuser 8 "September 22, 2004"
+.LO 1
+.SH NAME
+setuser \- Run a command as a specified user
+.SH SYNOPSIS
+.B setuser
+.IR "user command " [ " arg ... " ]
+.SH DESCRIPTION
+.P
+.B setuser
+sets the uid, group id, and supplementary groups from the
+given user name, then execs the given program with the
+given command line arguments.  If the exec fails, this
+process exits with nonzero status.  If it succeeds, it exits
+with the status of the program exec replaces it with.
+.P
+Compared with "su", the setuser command is more oriented to
+programmatic usage.  It does not start a shell, and it does not create
+an extra process to control the one that runs as the given user -- a
+process that may ignore various signals.  The command line arguments
+are not re-parsed as in "su -c".  It just sets user and group ids, then
+runs the requested command.
+.P
+If the effective user is already the requested one, this command
+is a no-op.
+.SH "SEE ALSO"
+startstop(8), monitor(8)
