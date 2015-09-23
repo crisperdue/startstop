@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <signal.h>
 #include <time.h>
-#include <libiberty.h>
 #include <errno.h>
 #include <syslog.h>
 #include <sys/types.h>
@@ -225,12 +224,12 @@ void handledeath(int status) {
            progname, savepid, code);
   } else if (WIFSIGNALED(status)) {
     signal = WTERMSIG(status);
-    signame = strsigno(signal);
+    signame = strsignal(signal);
     if (killing) {
       syslog(LOG_NOTICE, "%s[%d] terminated by monitor %s",
 	     progname, savepid, signame);
     } else {
-      syslog(LOG_ERR, "%s[%d] terminated by %s",
+      syslog(LOG_ERR, "%s[%d] terminated by signal %d",
              progname, savepid, signame);
     }
   } else {

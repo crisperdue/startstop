@@ -9,6 +9,7 @@
 #include <pwd.h>
 #include <sys/types.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 /*
    Sets the uid, group id, and supplementary groups from the
