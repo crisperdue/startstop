@@ -1,6 +1,7 @@
-#!/bin/sh
+#!/bin/bash
+# Note: usage of "kill" here is dependent on bash.
 #
-# Copyright 2001, 2002, 2004 Crispin Perdue (cris@perdues.com).
+# Copyright 2001, 2002, 2004, 2015 Crispin Perdue (cris@perdues.com).
 # This script is distributable under the terms of the GNU Public License.
 #
 # Universal LSB-compliant (SytemV-ish) server start/stop script
@@ -306,12 +307,13 @@ case "$action" in
 
   signal)
         # This command is an extension
-	kill "-$signal" "$pid"
+	kill -s "$signal" "$pid"
 	;;
 
   sig*)
         # This command is an extension
-	kill "-$action" "$pid"
+        # TODO: Make this work for sh, not just bash
+	kill -s "$action" "$pid"
 	;;
 
   restart)
@@ -342,7 +344,7 @@ case "$action" in
         fi
         if test -n "$pid" && isrunning; then
           # If reload is automatic, user can use sigcont as the signal.
-          if kill "-$signal" "$pid"; then
+          if kill -s "$signal" "$pid"; then
             exit 0
           else
             echo "Could not send $signal to $pid" >&2; exit 1
