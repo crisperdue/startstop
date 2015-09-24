@@ -256,7 +256,7 @@ monitor_opt=
 # If nonempty, username of user to switch to
 user=
 
-while getopts l:mrs:u: option; do
+while getopts l:Lmrs:u option; do
   case $option in
     l) logfile="$OPTARG";;
     L) lock=;;
@@ -294,6 +294,7 @@ pid=$(test -r $pidfile && cat $pidfile)
 case "$action" in
 
   start)
+        echo start "$@"
         start "$@"
         exit $?
 	;;
@@ -328,7 +329,7 @@ case "$action" in
         ;;
 
   reload|force-reload)
-        if test -z "$reload"; then
+        if test -z "$allow_reload"; then
           if [ "$action" = reload ]; then
             echo "reload not supported"
             exit 3
