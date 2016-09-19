@@ -1,0 +1,34 @@
+# First cut simplistic control file for startstop Debian package.
+
+### Commented entries have reasonable defaults.
+### Uncomment to edit them.
+# Source: <source package name; defaults to package name>
+Section: Administrative Utilities
+Priority: optional
+Homepage: https://github.com/crisperdue/startstop
+Standards-Version: 3.9.2
+
+Package: startstop
+Version: 0.7.1
+Maintainer: Cris Perdue <cris@perdues.com>
+
+# Pre-Depends: <comma-separated list of packages>
+# Depends: <comma-separated list of packages>
+# Recommends: <comma-separated list of packages>
+# Suggests: <comma-separated list of packages>
+# Provides: <comma-separated list of packages>
+# Replaces: <comma-separated list of packages>
+
+Architecture: amd64
+Copyright: LICENSE
+# Changelog: <changelog file; defaults to a generic changelog>
+# Readme: <README.Debian file; defaults to a generic one>
+# Extra-Files: <comma-separated list of additional files for the doc directory>
+Files: monitor /usr/bin/
+  setuser /usr/bin/
+  logto /usr/bin/
+  startstop /usr/bin/
+  monitor.8.gz /usr/share/man/man8/
+  setuser.8.gz /usr/share/man/man8/
+  startstop.8.gz /usr/share/man/man8/
+Description: LSB standard-compliant service control

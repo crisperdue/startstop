@@ -2,3 +2,4 @@ logto
 monitor
 setuser
 *.gz
+*.deb

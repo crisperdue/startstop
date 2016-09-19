@@ -29,6 +29,3 @@ and the startstop shell script attempts to conform to the Single Unix
 Specification; however its portability to non-Linux systems has not been
 tested.  There is no autoconfiguration, just a simple Makefile.
 
-This software is currently released under the Lesser GNU Public License
-version 2.1.
-
